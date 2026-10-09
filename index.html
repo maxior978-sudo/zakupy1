@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>Lista Zakupów</title>
+  <style>
+    :root {
+      --bg: #f2f2f7;
+      --card: #ffffff;
+      --primary: #007aff;
+      --text: #1c1c1e;
+      --muted: #8e8e93;
+      --border: #e5e5ea;
+      --badge-bg: #e5f1ff;
+      --badge-text: #007aff;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 20px 16px 80px;
+      -webkit-font-smoothing: antialiased;
+    }
+    h1 {
+      font-size: 26px;
+      margin: 10px 0 20px;
+      text-align: center;
+    }
+    .input-group {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    input[type="text"] {
+      font-size: 16px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      outline: none;
+      background: var(--card);
+    }
+    #itemInput {
+      flex: 2;
+    }
+    #qtyInput {
+      width: 70px;
+      flex-shrink: 0;
+      text-align: center;
+    }
+    button.add-btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0 16px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      background: var(--card);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    li {
+      display: flex;
+      align-items: center;
+      padding: 14px 16px;
+      border-bottom: 0.5px solid var(--border);
+      font-size: 17px;
+      gap: 12px;
+    }
+    li:last-child { 
+      border-bottom: none; 
+    }
+    input[type="checkbox"] {
+      width: 22px;
+      height: 22px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+    .item-text {
+      flex: 1;
+      word-break: break-word;
+    }
+    .qty-badge {
+      background: var(--badge-bg);
+      color: var(--badge-text);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 8px;
+      white-space: nowrap;
+    }
+    .completed .item-text {
+      text-decoration: line-through;
+      color: var(--muted);
+    }
+    .completed .qty-badge {
+      background: #f2f2f7;
+      color: var(--muted);
+    }
+    .delete-btn {
+      background: none;
+      border: none;
+      color: #ff3b30;
+      font-size: 18px;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+    .empty-info {
+      text-align: center;
+      color: var(--muted);
+      margin-top: 30px;
+    }
+  </style>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+</head>
+<body>
+
+  <h1>🛒 Zakupy Domowe</h1>
+
+  <div class="input-group">
+    <input type="text" id="itemInput" placeholder="Produkt (np. mleko)" autocomplete="off">
+    <input type="text" id="qtyInput" placeholder="Ile? (np. 2)" autocomplete="off">
+    <button class="add-btn" onclick="addItem()">Dodaj</button>
+  </div>
+
+  <ul id="shoppingList"></ul>
+  <p id="emptyMsg" class="empty-info" style="display: none;">Wszystko kupione!</p>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyANflcbFrX24XXWe1Juy2rm1ZQDW3F2NIo",
+      authDomain: "zaku-6bf1d.firebaseapp.com",
+      databaseURL: "https://zaku-6bf1d-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "zaku-6bf1d",
+      storageBucket: "zaku-6bf1d.firebasestorage.app",
+      messagingSenderId: "167497264493",
+      appId: "1:167497264493:web:3c146029cf3d92d94bfe64",
+      measurementId: "G-E0BLEKSMR9"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database().ref('zakupy');
+
+    db.on('value', (snapshot) => {
+      const data = snapshot.val();
+      const listEl = document.getElementById('shoppingList');
+      const emptyMsg = document.getElementById('emptyMsg');
+      listEl.innerHTML = '';
+
+      if (!data) {
+        emptyMsg.style.display = 'block';
+        return;
+      }
+      emptyMsg.style.display = 'none';
+
+      Object.keys(data).forEach((id) => {
+        const item = data[id];
+        const li = document.createElement('li');
+        if (item.done) li.classList.add('completed');
+
+        const qtyHtml = item.quantity ? `<span class="qty-badge">${item.quantity}</span>` : '';
+
+        li.innerHTML = `
+          <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleItem('${id}', ${item.done})">
+          <span class="item-text">${item.text}</span>
+          ${qtyHtml}
+          <button class="delete-btn" onclick="removeItem('${id}')">✕</button>
+        `;
+        listEl.appendChild(li);
+      });
+    });
+
+    function addItem() {
+      const nameInput = document.getElementById('itemInput');
+      const qtyInput = document.getElementById('qtyInput');
+      const text = nameInput.value.trim();
+      const quantity = qtyInput.value.trim();
+
+      if (!text) return;
+
+      db.push({
+        text: text,
+        quantity: quantity || null,
+        done: false,
+        createdAt: Date.now()
+      });
+
+      nameInput.value = '';
+      qtyInput.value = '';
+      nameInput.focus();
+    }
+
+    function toggleItem(id, currentStatus) {
+      db.child(id).update({ done: !currentStatus });
+    }
+
+    function removeItem(id) {
+      db.child(id).remove();
+    }
+
+    document.getElementById('itemInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') addItem();
+    });
+    document.getElementById('qtyInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') addItem();
+    });
+  </script>
+</body>
+</html>
